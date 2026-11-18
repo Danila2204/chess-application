@@ -92,6 +92,7 @@ namespace ChessApplication {
 			this->buttonRegister->TabIndex = 1;
 			this->buttonRegister->Text = L"Регистрация";
 			this->buttonRegister->UseVisualStyleBackColor = true;
+			this->buttonRegister->Click += gcnew System::EventHandler(this, &RegisterForm::buttonRegister_Click);
 			// 
 			// textBoxLogin
 			// 
@@ -156,8 +157,8 @@ namespace ChessApplication {
 #pragma endregion
 	private: System::Void buttonEntire_Click(System::Object^ sender, System::EventArgs^ e)
 	{
-		String^ login = textBoxLogin->Text;
-		String^ password = textBoxPassword->Text;
+		String^ login = textBoxLogin->Text->Trim();
+		String^ password = textBoxPassword->Text->Trim();
 
 		// Проверка на пустоту
 		if (login == "" || password == "") {
@@ -210,5 +211,53 @@ namespace ChessApplication {
 			mainForm->Show();
 		}
 	}
+private: System::Void buttonRegister_Click(System::Object^ sender, System::EventArgs^ e)
+{
+	// 1. Берем текст и обрезаем пробелы
+	String^ login = textBoxLogin->Text->Trim();
+	String^ password = textBoxPassword->Text->Trim();
+
+	if (login == "" || password == "") {
+		labelError->Text = "Введите логин и пароль!";
+		return;
+	}
+
+	// 2. Конвертируем в std::string через UTF-8 (чтобы русские буквы в логине не ломались)
+	array<Byte>^ bytesLogin = Encoding::UTF8->GetBytes(login);
+	array<Byte>^ bytesPassword = Encoding::UTF8->GetBytes(password);
+
+	std::string strLogin = "";
+	for each (Byte b in bytesLogin) strLogin += (char)b;
+
+	std::string strPassword = "";
+	for each (Byte b in bytesPassword) strPassword += (char)b;
+
+	// 3. Проверяем, есть ли уже такой пользователь (используем Login, а не name!)
+	std::string condition = "Login = '" + escapeString(strLogin) + "'";
+	char* errMsg = 0;
+	auto existingUser = getRecords(GlobalDB, "users", condition, "", &errMsg);
+
+	if (!existingUser.empty()) {
+		labelError->Text = "Пользователь с таким именем уже существует";
+		return;
+	}
+
+	// 4. Добавляем в БД (используем Login и Password)
+	std::vector<std::string> cols = { "Login", "Password" };
+	std::vector<Value> vals = { Value(strLogin), Value(strPassword) };
+
+	if (addRecord(GlobalDB, "users", cols, vals, &errMsg)) {
+		labelError->ForeColor = System::Drawing::Color::Green; // Красим текст в зеленый (успех)
+		labelError->Text = "Регистрация успешна! Теперь войдите.";
+
+		// Очищаем поля
+		textBoxLogin->Text = "";
+		textBoxPassword->Text = "";
+	}
+	else {
+		labelError->ForeColor = System::Drawing::Color::Red; // Красим в красный (ошибка)
+		labelError->Text = "Ошибка базы данных при регистрации.";
+	}
+}
 };
 }
